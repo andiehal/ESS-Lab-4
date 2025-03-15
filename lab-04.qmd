@@ -10,6 +10,7 @@ execute:
 # ESS 330 - Lab 4: LTER Network Data
 
 ### Library Code
+
 ```{r}
 library(tidyverse)
 library(ggpubr)
@@ -18,7 +19,8 @@ library(car)
 library(visdat)
 ```
 
-## Part 1: Univariate and Bivariate Statistics 
+## Part 1: Univariate and Bivariate Statistics
+
 ```{r}
 #Reading/Visualizing in the Data
 and_vertebrates <- and_vertebrates
@@ -33,8 +35,7 @@ and_vertebrates |>
   count(unittype)
 ```
 
-> Goal: Is abundance of species impacted by channel and forest type?
-> Null Hypothesis: forest and channel type are independent.
+> Goal: Is abundance of species impacted by channel and forest type? Null Hypothesis: forest and channel type are independent.
 
 ### 1.1 Chi-square - Catagorical Analysis
 
@@ -59,9 +60,11 @@ trout_clean  |>
                     add = "mean_se") 
 
 ```
-> Since the p-value is very small (p-value < 2.2e-16), there is a significant correlation relationship between forest type and channel unit. 
+
+> Since the p-value is very small (p-value \< 2.2e-16), there is a significant correlation relationship between forest type and channel unit.
 
 ### 1.2 t-test - Compare two means
+
 ```{r}
 #Cleaning/Visualizing with Weight
 trout_clean |> 
@@ -91,6 +94,156 @@ var.test(log(cc_weight), log(og_weight))
 
 #t.test function
 t.test(log(trout_clean$weight_g) ~ trout_clean$section, var.equal = TRUE)
+
+#Welch Two Sample t-test 
+t.test(trout_clean$weight_g ~ trout_clean$section, var.equal = FALSE)
 ```
 
+### 1.3 Corelation - Assess relationships
 
+```{r}
+# Refining Data for Coastal giant salamander
+sally_clean <- and_vertebrates |> 
+  filter(species == "Coastal giant salamander") |> 
+  drop_na(length_2_mm, weight_g)
+
+ggarrange(gghistogram(sally_clean$length_2_mm, title = "Length"),
+gghistogram(sally_clean$weight_g, title = "Weight"))
+
+s <- sally_clean |> 
+  slice_sample(n = 5000) 
+
+shapiro.test(s$length_2_mm)
+shapiro.test(s$weight_g)
+
+ggarrange(
+ gghistogram(log(sally_clean$length_2_mm), title = "Length"), 
+ gghistogram(log(sally_clean$weight_g), title = "Weight") )
+
+cor.test(log(sally_clean$length_2_mm), log(sally_clean$weight_g))
+
+sally_clean |> 
+  mutate(log_length = log(length_2_mm), log_weight = log(weight_g)) |> 
+  ggscatter(x = 'log_length', 
+            y = 'log_weight', 
+            alpha = .35,
+            add = "loess")
+
+cor.test(sally_clean$length_2_mm, sally_clean$weight_g, method = "spearman")
+```
+
+## Exercises Part 1
+
+### Question 1 - Relationship between forest type and channel unit for Coastal giant salamander (CGS)
+
+```{r}
+# Creating a table just by section and unittype
+sally_ct <- table(sally_clean$section, sally_clean$unittype)
+
+# Chi-sqaure test
+chisq.test(sally_ct)
+
+# Visualizing the differences
+sally_clean  |>  
+  count(unittype, section)  |>  
+  ggpubr::ggbarplot(x = 'unittype', y = 'n', 
+                    fill = 'section', 
+                    palette = c("#564E58", "#904E55"),
+                    add = "mean_se") 
+```
+
+> Chi-square test results: The relationship between the forest and channel type of the Costal Giant Salamander is statisically significant. The p-value (p-value \< 2.2e-16) demonstrates that we reject our null hypothesis that there is no relationship between the variables and the abundance of the species. The distribution is visually shown above. The most common channel type is "C" and it seems to have a pretty even percentage between the two forest types.
+
+### Question 2 - Species Biomass difference for the CGS
+
+```{r}
+# Visualizing the differences
+sally_clean |> 
+  drop_na(weight_g) |> 
+  ggpubr::ggviolin(x = "section", 
+                   y     = "weight_g", 
+                   add   = "boxplot",
+                   color = "section",
+                   palette = c("#564E58", "#904E55")) 
+
+# Equal Variance Test
+sally_cc_weight <- sally_clean |> 
+  filter(section == "CC") |> 
+  pull(weight_g)
+
+sally_og_weight <- sally_clean |> 
+  filter(section == "OG") |> 
+  pull(weight_g)
+
+var.test(sally_cc_weight, sally_og_weight)
+
+# Normal Distribution Test
+ggpubr::ggarrange(ggpubr::gghistogram(sally_cc_weight, main = "Clear Cut"), 
+                  ggpubr::gghistogram(sally_og_weight, main = "Old Growth"))
+
+var.test(log(sally_cc_weight), log(sally_og_weight))
+
+```
+
+> Equal Variance Test Results: Since the p-value (3.714e-06) is quite small, we can assume that the variance between these variables is not equal. This asks for a normal distribution test.
+
+> Normal Distribution Test: As the visualization of the two histograms show a right-skewed nature, we must normalize these variables. The normalization var.test shows a low p-value (0.008327), meaning that these variables are indeed not equal to each other. These tests support our hypothesis that the distribution between these different biomass’s are not equal, and from our visualizing of the two weight_g's, Old Growth is the higher distribution for this species.
+
+### Question 3 - Correlation between body length and body mass for Cutthroat Trouts
+
+> Variable for Body Length: length_1_mm
+>
+> Variable for Body Mass: weight_g
+
+```{r}
+# Pearson Correlation Method
+trout_clean <- and_vertebrates |>
+  drop_na(length_1_mm, weight_g)
+
+ggarrange(
+  gghistogram(trout_clean$length_1_mm, title = "Vertebrate Length (mm)"),
+  gghistogram(trout_clean$weight_g, title = "Body Mass (g)"))
+
+t <- trout_clean |>
+  slice_sample(n = 5000)
+
+shapiro.test(t$length_1_mm)
+shapiro.test(t$weight_g)
+
+ggarrange(
+  gghistogram(log(trout_clean$length_1_mm), title = "Vertebrate Length (mm)"),
+  gghistogram(log(trout_clean$weight_g), title = "Body Mass (g)"))
+
+cor.test(log(trout_clean$length_1_mm), log(trout_clean$weight_g))
+
+trout_clean |> 
+  mutate(log_length = log(trout_clean$length_1_mm), log_weight = log(trout_clean$weight_g)) |> 
+  ggscatter(x = 'log_length', 
+            y = 'log_weight', 
+            alpha = .35,
+            add = "loess")
+
+```
+
+> Pearson Correlation Test Discussion -
+>
+> Distribution of Variables: Both length and body mass are right skewed, which means there is a high likely hood of a non-equal distribution.
+>
+> Shapiro Test: For length and weight, since the p-values (p-value \< 2.2e-16) are so small, it rejects the null hypothesis of normal distribution and states that it does not fit a normal distribution.
+>
+> The visualizing of the data shows that even with a bit of a bump in the middle of the log data, there is a positive correlation between weight and length. The pearson correlation test's p-value (p-value \< 2.2e-16) is so small it does support that there is correlation between the two.
+
+```{r}
+# Spearman Correlation Test
+cor.test(trout_clean$length_1_mm, trout_clean$weight_g, method = "spearman")
+
+trout_clean |>
+  ggscatter(x = 'length_1_mm', 
+            y = 'weight_g', 
+            alpha = .35,
+            add = "loess")
+```
+
+> Spearman Correlation Test Discussion -
+>
+> Even with the not-perfectly-distribution of the variables, there is still a high correlation between body mass and length. The scatterplot also shows that there is a trend with increasing increments of both variables, verifying that there is a correlation between the two variables.
