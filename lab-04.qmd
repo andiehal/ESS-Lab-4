@@ -1,0 +1,96 @@
+---
+title: "ESS 330 - Lab 4: LTER Network Data"
+author: "Andie Hall"
+date: "03/12/2025"
+format: html
+execute:
+  echo: true
+---
+
+# ESS 330 - Lab 4: LTER Network Data
+
+### Library Code
+```{r}
+library(tidyverse)
+library(ggpubr)
+library(lterdatasampler)
+library(car)
+library(visdat)
+```
+
+## Part 1: Univariate and Bivariate Statistics 
+```{r}
+#Reading/Visualizing in the Data
+and_vertebrates <- and_vertebrates
+glimpse(and_vertebrates)
+
+vis_dat(and_vertebrates)
+
+#Filtering out Cutthroat Trout
+and_vertebrates |>
+  filter(species == "Cutthroat trout") |>
+  drop_na(unittype) |>
+  count(unittype)
+```
+
+> Goal: Is abundance of species impacted by channel and forest type?
+> Null Hypothesis: forest and channel type are independent.
+
+### 1.1 Chi-square - Catagorical Analysis
+
+```{r}
+#Reforming data into a contingency table
+trout_clean <- and_vertebrates |>
+  filter(species == "Cutthroat trout") |>
+  filter(unittype %in% c("C", "P", "SC")) |>
+  drop_na(unittype, section)
+
+cont_table <- table(trout_clean$section, trout_clean$unittype)
+
+#Chi-square test analysis 
+chisq.test(cont_table)
+
+#Plotting the Data
+trout_clean  |>  
+  count(unittype, section)  |>  
+  ggpubr::ggbarplot(x = 'unittype', y = 'n', 
+                    fill = 'section', 
+                    palette = c("#00AFBB", "#E7B800"),
+                    add = "mean_se") 
+
+```
+> Since the p-value is very small (p-value < 2.2e-16), there is a significant correlation relationship between forest type and channel unit. 
+
+### 1.2 t-test - Compare two means
+```{r}
+#Cleaning/Visualizing with Weight
+trout_clean |> 
+  drop_na(weight_g) |> 
+  ggpubr::ggviolin(x = "section", 
+                   y     = "weight_g", 
+                   add   = "boxplot",
+                   color = "section",
+                   palette = c("#00AFBB", "#E7B800")) 
+
+#Equal Variance Test Assumption
+cc_weight <- trout_clean |>
+  filter(section == "CC") |>
+  pull(weight_g) 
+
+og_weight <- trout_clean |>
+  filter(section == "OG") |>
+  pull(weight_g)
+
+var.test(cc_weight, og_weight)
+
+#Normal Distribution
+ggpubr::ggarrange(ggpubr::gghistogram(cc_weight, main = "Clear Cut"), 
+                  ggpubr::gghistogram(og_weight, main = "Old Growth"))
+
+var.test(log(cc_weight), log(og_weight))
+
+#t.test function
+t.test(log(trout_clean$weight_g) ~ trout_clean$section, var.equal = TRUE)
+```
+
+
