@@ -247,3 +247,152 @@ trout_clean |>
 > Spearman Correlation Test Discussion -
 >
 > Even with the not-perfectly-distribution of the variables, there is still a high correlation between body mass and length. The scatterplot also shows that there is a trend with increasing increments of both variables, verifying that there is a correlation between the two variables.
+
+## Part 2: Multivariate Statistics 
+
+### 2.1 - Exploring the Data set
+
+```{r}
+data("pie_crab")
+vis_dat(pie_crab)
+count(pie_crab, site)
+summary(pie_crab)
+```
+
+### 2.2 - ANOVA
+
+```{r}
+# Differences in Crab Sizes between Sites
+pie_crab |> 
+  ggboxplot(x = 'site', y = 'size', col = 'site') +
+  geom_jitter(size =.25) + 
+  theme(legend.postition = "none")
+
+# Assumptions - Normality
+norms <- pie_crab |> 
+  nest(data = -site) |>
+  mutate(Shapiro = map(data, ~ shapiro.test(.x$size)),
+         n = map_dbl(data, nrow),
+         glance_shapiro = map(Shapiro, broom::glance)) |>
+  unnest(glance_shapiro)
+
+flextable::flextable(dplyr::select(norms, site, n, statistic, p.value)) |>
+  flextable::set_caption("Shapiro-Wilk normality test for size at each site")
+
+# ANOVA Model
+(res_aov <- aov(size ~ site, data = pie_crab))
+
+gghistogram(res_aov$residuals)
+
+shapiro.test(res_aov$residuals)
+
+#Assumptions - Equal Variances (Levene's Test)
+leveneTest(size ~ site, data = pie_crab)
+
+oneway.test(size ~ site, data = pie_crab, var.equal = FALSE)
+
+# Filter a subset of the sites
+pie_sites <- pie_crab |> 
+  filter(site %in% c("GTM", "DB", "PIE"))
+
+# Check for equal variance
+leveneTest(size ~ site, data = pie_sites)
+
+pie_anova <- aov(size ~ site, data = pie_sites)
+summary(pie_anova)
+
+# Tukey's HSD Test
+TukeyHSD(pie_anova)
+
+# Linear Regression 
+pie_lm <- lm(size ~ latitude, data = pie_crab)
+
+#view the results of the linear model
+summary(pie_lm)
+pie_crab |> 
+  ggscatter(x = 'latitude', y = 'size', 
+            alpha = .35, 
+            add = "reg.line")
+
+# Predicting with Regression Model
+new_lat <- data.frame(latitude = c(32, 36, 38))
+
+broom::augment(pie_lm, newdata = new_lat)
+
+#Multiple Linear Regression
+pie_mlm <- lm(size ~ latitude + air_temp + water_temp, data = pie_crab)
+
+summary(pie_mlm)
+
+pie_crab |> 
+  dplyr::select(latitude, air_temp, water_temp) |> 
+  cor()
+```
+
+## Exercises: Part 2
+
+### Question 1: Creating a Boxplot to show carapace width for each site 
+
+```{r}
+#
+res_aov <- aov(size ~ site, data = pie_crab)
+
+pie_sites <- pie_crab |> 
+  filter(site %in% c("GTM", "DB", "PIE"))
+
+leveneTest(size ~ site, data = pie_sites)
+
+oneway.test(size ~ site, data = pie_sites, var.equal = FALSE)
+
+pie_anova <- aov(size ~ site, data = pie_sites)
+summary(pie_anova)
+
+TukeyHSD(pie_anova)
+# --------------------
+# Ordering Sites by Latitude
+pie_sites <- pie_sites |>
+  arrange(latitude)
+
+# Creating the Boxplot
+ggplot(pie_sites, aes(x = site, y = size)) +
+  geom_boxplot(fill = "#B5838D", color = "#FFB4A2") +
+  labs(x = "Site (Ordered by Latitude)", y = "Carapace Width (mm)", 
+       title = "Carapace Width by Site Ordered by Latitude") +
+  theme_minimal()
+
+```
+
+> From the values of the ANOVA table model, there is a high significance in correlation (p-value \< 2e-16) when looking at size and sites based on their latitude. As shown in the boxplot, you can see that the sites with a higher value latitude has crab size values that are larger than the other two sites.
+
+### Question 2 - Linear Regression for Water_temp
+
+```{r}
+# Linear Model
+pie_wts <- lm(size ~ water_temp, data = pie_crab)
+summary(pie_wts)
+
+# Scatterplot of Variables
+pie_crab |>
+  ggscatter(x = 'water_temp',
+            y = 'size',
+            alpha = 0.35,
+            add = "loess") +
+  labs(title = "Correlation of Water Temp and Size for Fiddler Crabs")
+```
+
+> From both the linear model and the scatter plot showing the differences in water_temp and size, there is a correlation with decreased water temperature and larger sizes. With the p-value being very small (\< 2.2e-16), this is statistically significant in showing that our hypothesis is accepted. This means that their is a correlation between size and water temperature.
+
+### Question 3 - Multiple Linear Regression on Width Predictors
+
+```{r}
+pie_crab |> 
+  dplyr::select(latitude, air_temp, water_temp) |> 
+  cor()
+
+pie_mlm <- lm(size ~ latitude + air_temp + water_temp, data = pie_crab)
+
+summary(pie_mlm)
+
+```
+
+> Based on the correlation table readings, there is not a correlation between the predictor variables, as each of them read above 0.05. However, based on the linear model's report of the p-values, each of these predictor variables has a statistically significantly impact on the size of the fiddler crabs.
